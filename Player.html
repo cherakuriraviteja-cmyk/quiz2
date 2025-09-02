@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Join Quiz</title>
+  <style>
+    body { font-family: Arial; padding: 20px; max-width: 600px; margin: auto; text-align: center; }
+    input, button { margin: 10px 0; padding: 8px; width: 100%; font-size: 14px; }
+    #quizSection button { margin: 5px 0; }
+    #quizSection { display: none; }
+  </style>
+</head>
+<body>
+ <h3>🏆 Sanghamitra Hospital Pvt Ltd - Quiz</h3>
+ <h4>Learn from questions</h4>
+<h4>స్పర్ధయా వర్ధతే విద్యా </h4>
+<h4>ఆధునిక విధానంలో పోటీతత్వం వల్ల మన నైపుణ్యాలు మరింత మెరుగుపడతాయి. ఆరోగ్యకరమైన పోటీ అనేది పూర్తి సామర్థ్యాన్ని చేరుకోవడానికి ప్రేరేపిస్తుంది</h4>
+  <form id="joinForm">
+    <input type="text" id="empId" placeholder="Enter Employee ID" required>
+    <input type="text" id="name" placeholder="Enter Name" required>
+    <button type="submit">Start</button>
+  </form>
+
+  <div id="quizSection">
+    <h3 id="question">Waiting for admin to start...</h3>
+    <div id="options"></div>
+    <p><strong>⏱️ Time Left: <span id="timer">--</span> sec</strong></p>
+  </div>
+
+  <script>
+    const scriptURL = 'https://script.google.com/macros/s/AKfycbypw27iyX6ZrlQRsKv3WiCDdMMJeSvDC4jxkwh02qKsd0cS26MumEgTZvTS8QE5F0Os_Q/exec';
+    let empId = '', name = '', sessionId = '', lastQuestion = '', timerInterval;
+
+    function generateSessionId() {
+      return empId + "_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
+    }
+
+    document.getElementById('joinForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      empId = document.getElementById('empId').value.trim();
+      name = document.getElementById('name').value.trim();
+      if (!empId || !name) return alert("Please enter both ID and Name");
+
+      sessionId = generateSessionId();
+
+      let res = await fetch(`${scriptURL}?action=join&empId=${empId}&name=${name}&sessionId=${sessionId}`);
+      let msg = await res.text();
+
+      if (msg.includes("denied")) {
+        alert("❌ You are already logged in from another device!");
+        return;
+      }
+
+      document.getElementById('joinForm').style.display = 'none';
+      document.getElementById('quizSection').style.display = 'block';
+      pollQuestion();
+    });
+
+    function pollQuestion() {
+      setInterval(async () => {
+        const res = await fetch(`${scriptURL}?action=getQuestion`);
+        const q = await res.json();
+
+        if (!q.question) {
+          document.getElementById('question').innerText = "❗ No active question";
+          document.getElementById('options').innerHTML = "";
+          return;
+        }
+
+        if (q.question === lastQuestion) return;
+        lastQuestion = q.question;
+        document.getElementById('question').innerText = q.question;
+
+        document.getElementById('options').innerHTML = q.options.map((opt, i) =>
+          `<button onclick="submitAnswer(${i})">${opt}</button>`
+        ).join("<br><br>");
+
+        startTimer();
+      }, 500);
+    }
+
+    function startTimer() {
+      clearInterval(timerInterval);
+      let timeLeft = 30;
+      document.getElementById('timer').innerText = timeLeft;
+      window.answered = false;
+
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        document.getElementById('timer').innerText = timeLeft;
+        if (timeLeft <= 0) {
+          clearInterval(timerInterval);
+          disableButtons();
+        }
+      }, 1000);
+    }
+
+    function submitAnswer(index) {
+      if (window.answered) return;
+      window.answered = true;
+      clearInterval(timerInterval);
+
+      fetch(`${scriptURL}?action=submitAnswer&empId=${empId}&name=${name}&sessionId=${sessionId}&answer=${index}`)
+        .then(res => res.text())
+        .then(msg => alert(msg.includes("invalid") ? "❌ Invalid session!" : "✅ Answer submitted"))
+        .catch(() => alert("❌ Error submitting answer"));
+
+      disableButtons();
+    }
+
+    function disableButtons() {
+      document.querySelectorAll('#options button').forEach(btn => btn.disabled = true);
+    }
+  </script>
+</body>
+</html>
